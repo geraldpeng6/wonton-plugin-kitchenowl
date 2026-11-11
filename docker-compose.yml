@@ -35,7 +35,7 @@ services:
       start_interval: 2s
 
 x-wonton:
-  spec: "0.12"
+  spec: "0.11"
   id: org.kitchenowl.kitchenowl
   version: 0.1.0
   kind: app
@@ -84,7 +84,7 @@ x-wonton:
   permissions:
     # 只有"从网址导入菜谱"要出网：服务端替你抓取网页解析食材（带 SSRF 过滤）。清单、菜谱、菜单和账目都不出网。
     - network.egress
-  # 上游没写最低内存；本机空闲实测约 xxxM，取 512M（装机实测后更新）。
+  # 上游没写最低内存；本机空闲实测约 423M（单 uWSGI worker，食材解析模型占大头），取 512M。
   requirements:
     arch: [amd64, arm64]
     memory: 512M
