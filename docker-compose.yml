@@ -1,78 +1,90 @@
-# 示例插件：nginx 显示一个网页，向登录的人问好。改成自己的应用见 https://github.com/wontonapp/wonton-docs/blob/main/develop.md#写插件。
+# KitchenOwl：全家共用的购物清单、菜谱、一周菜单和共同账目。前后端一体的官方镜像，SQLite 存 /data，
+# 不额外起数据库。
+#
+# 登录全走核心的 OIDC：密码登录关掉后注册路由一并移除；onboarding 表单（建第一个账号）不受那个开关管，
+# 用 DISABLE_ONBOARDING 一并关掉，第一个账号由首次 OIDC 登录自动创建。入口直接落在 /signin?launch=custom，
+# 打开即发起 OIDC，不用点登录按钮。云吞 OIDC 的 token 端点只收 client_secret_post（上游写死）。
+# 第一个登录的人建"家庭"并邀家人；没有服务器管理员，家庭内的权限由家庭 owner 管，家人流程都走得到（见 README）。
 services:
   web:
-    # 镜像按摘要固定（多架构镜像写清单列表的摘要），标签只给人看。
-    image: nginx:1.31.8-alpine@sha256:713fc2ebfd92e8217db451477182ee91944b123d2b1ee9fd5a8c6e91ca6c3a11
+    image: tombursch/kitchenowl:v0.8.1@sha256:6a048135399691da25aec04ea107666cb7ce8eb46f5fed9a46a5ac254fe23073
+    # 镜像默认 root 启动再 gosu 到 kitchenowl(1000)；直接以 1000 运行时 entrypoint 跳过 chown，
+    # 数据目录由核心按 user 交给 1000:1000。
+    user: "1000:1000"
     environment:
-      # 网关代登录：SSI 回显的 Remote-User 只信核心带来的。官方镜像启动时对 templates 目录里的
-      # *.template 做 envsubst，把下面的地址换进 nginx 配置（见 web/default.conf.template）。
-      WONTON_CORE_ADDRESS: ${WONTON_CORE_ADDRESS}
-    # 包里的文件经 configs 交给容器（核心在启动前写进去），不能用卷挂载。
-    configs:
-      - source: site
-        target: /etc/nginx/templates/default.conf.template
-      - source: page
-        target: /usr/share/nginx/html/index.html
-      - source: tokens
-        target: /usr/share/nginx/html/tokens.css
+      TZ: ${TZ}
+      # 网页的公开地址：CORS 按它放行，OIDC 回调按它拼，和核心登记的回调路径一致。
+      FRONT_URL: ${WONTON_APP_URL}
+      # 不覆盖时回落到镜像里写死的 super-secret，必须用核心生成的密钥。
+      JWT_SECRET_KEY: ${WONTON_SECRET_JWT_KEY}
+      # 只认云吞登录：密码登录关掉即同时禁用注册（上游行为）。
+      DISABLE_USERNAME_PASSWORD_LOGIN: "true"
+      DISABLE_ONBOARDING: "true"
+      OIDC_ISSUER: ${WONTON_OIDC_ISSUER}
+      OIDC_CLIENT_ID: ${WONTON_OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${WONTON_OIDC_CLIENT_SECRET}
+    volumes:
+      # SQLite 库（/data/database.db）和上传的图片（/data/upload）。
+      - ${WONTON_APP_DATA}/data:/data
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      # 上游 health 接口（长后缀是上游源码里的固定常量，前端也调它）；查 8080 把前端静态层一并验到。
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/health/8M4F88S8ooi4sMbLBfkkV7ctWwgibW6V"]
       interval: 30s
       timeout: 5s
-      start_period: 30s
-      start_interval: 1s
-
-configs:
-  site:
-    file: web/default.conf.template
-  page:
-    file: web/index.html
-  tokens:
-    file: web/tokens.css
+      start_period: 60s
+      start_interval: 2s
 
 x-wonton:
-  spec: "0.6"
-  # 换成你自己的：反向域名形式，装上以后不能改。
-  id: app.example.hello
-  version: 0.1.1
+  spec: "0.12"
+  id: org.kitchenowl.kitchenowl
+  version: 0.1.0
   kind: app
-  title: { zh: 你好, en: Hello }
-  description: { zh: 向登录的人问好的示例网页, en: An example page that greets whoever is signed in }
-  icon: icon.svg
+  title: { zh: 购物清单（KitchenOwl）, en: Shopping List (KitchenOwl) }
+  description:
+    zh: 全家共用一张买菜清单：想买什么随时加，买完划掉，实时同步；还能存菜谱、排一周菜单、记共同的账
+    en: One shared shopping list for the whole family, always in sync — with recipes, a weekly meal plan and shared expenses
+  icon: icon.png
   notices: [NOTICE]
   screenshots: [screenshots/home.png]
-  author: { name: Example }
-  homepage: https://nginx.org
-  # 应用（这里是 nginx）的许可证；插件包自己的许可证写在仓库的 LICENSE 里。
-  license: BSD-2-Clause
+  author: { name: geraldpeng6, url: https://github.com/geraldpeng6 }
+  homepage: https://kitchenowl.org
+  license: AGPL-3.0-only
   tags:
-    zh: [工具]
-    en: [Tools]
+    zh: [购物清单, 菜谱, 记账, 效率]
+    en: [Shopping list, Recipes, Finance, Productivity]
   about:
     zh: |
-      一个示例网页：登录以后，页面会向你问好。新建插件时可以照着改。
+      全家人共用一张买菜清单：做饭时想买什么随手加进去，到了超市打开手机照着买，买完划掉，大家的手机上马上同步，谁改的都看得到。
+
+      菜谱存在应用里，做菜时照着步骤来，缺的食材一键加进清单；可以照菜谱排一周的菜单，家里共同的账（谁垫了钱、花在哪里）也能记清楚。
+
+      打开就用云吞的账号登录，不用再注册。第一次进去先建一个"家庭"，再在家庭设置里把家人邀请进来：家人先用云吞账号登录一次，才会出现在邀请名单里。
     en: |
-      An example page: once you are signed in, the page says hello. Copy it as a starting point for a new plugin.
-  release_notes: { zh: 名字和说明更新。, en: Product name and description update. }
+      One shopping list shared by the whole family: add items while cooking, open your phone at the store and shop the list, tick things off and everyone's phone updates instantly, with a record of who changed what.
+
+      Recipes live in the app — cook along with the steps and add missing ingredients to the list with one tap. Plan the week's meals from your recipes and keep track of shared expenses (who paid, and for what).
+
+      Opens straight into your Wonton account — no separate sign-up. On first use, create a household and invite family from its settings: they appear in the invite list after signing in with their Wonton account once.
+  release_notes:
+    zh: 首个版本：KitchenOwl v0.8.1，用云吞账号登录。
+    en: "Initial release: KitchenOwl v0.8.1, signed in with your Wonton account."
   webui:
     service: web
-    port: 80
-    # 示例页回显网关注入的用户名，见 https://github.com/wontonapp/wonton-docs/blob/main/plugin-spec.md#网关代登录sso-proxy。
-    sso: proxy
-    proxy:
-      headers:
-        Remote-User: "{user}"
-  # 能放进侧边栏“我的应用”的页面，见 https://github.com/wontonapp/wonton-docs/blob/main/plugin-spec.md#应用页面tabs。放不放由用户决定。
-  tabs:
-    - id: home
-      title: { zh: 主页, en: Home }
-      icon: tabs/home.svg
-      icon_selected: tabs/home-fill.svg
-      path: /
-      # 这个页面没做适配，用默认的 inset：从状态栏下沿开始，页面不用管安全区。
-      # 想让内容从状态栏后面滚过，写 layout: edge-to-edge，并用 --wonton-inset-* 留出系统安全区的位置。
-  permissions: []
-  # 上游 nginx 官方镜像，amd64 和 arm64 都有；上游没写最低内存，按本机空闲实测取整（实测约 24M，取 64M）。
+    port: 8080
+    # 打开网页直接发起 OIDC 登录（上游登录页的免点击入口），已登录的用户会被应用带回主页。
+    path: /signin?launch=custom
+    sso: oidc
+    oidc:
+      # 上游把回调固定在 FRONT_URL/signin/redirect（浏览器回跳页把 code+state POST 回后端）。
+      redirect_paths: [/signin/redirect]
+      token_endpoint_auth_method: client_secret_post
+  secrets:
+    # 会话签名密钥，由核心生成。
+    jwt_key: { generate: { bytes: 32 } }
+  permissions:
+    # 只有"从网址导入菜谱"要出网：服务端替你抓取网页解析食材（带 SSRF 过滤）。清单、菜谱、菜单和账目都不出网。
+    - network.egress
+  # 上游没写最低内存；本机空闲实测约 xxxM，取 512M（装机实测后更新）。
   requirements:
     arch: [amd64, arm64]
-    memory: 64M
+    memory: 512M

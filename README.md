@@ -1,43 +1,35 @@
-# 云吞插件模板
+# 购物清单（KitchenOwl）
 
-开发流程见[插件开发指南](https://github.com/wontonapp/wonton-docs/blob/main/develop.md)。
+全家人共用一张买菜清单，手机和电脑实时同步；菜谱、一周菜单和家里共同的账也在里面。上游是
+[KitchenOwl](https://kitchenowl.org)（AGPL-3.0），本仓库是它的云吞插件包。
 
-这是一个能安装的示例插件 `app.example.hello`：使用 nginx 官方镜像显示问候页，经网关的 `sso: proxy` 注入用户名，页面显示“你好，<用户名>”。示例没有应用账号、持久化数据或 MCP 工具。
+## 做什么
 
-## 示例文件
+- **购物清单**：想买什么随手加，买完划掉，全家实时同步，谁改的都能看到。
+- **菜谱**：存做法，缺的食材一键加进清单；按菜谱排一周菜单。
+- **共同的账**：记家里共同的花销，谁垫了钱、花在哪，月底结得清。
 
-| 路径 | 内容 |
-| --- | --- |
-| `docker-compose.yml` | 示例清单、nginx 服务和三个 `configs` |
-| `web/default.conf.template` | nginx 配置，启用 SSI 回显用户名并提供健康检查入口；只放行来自核心地址（`${WONTON_CORE_ADDRESS}`）的请求，其余来源 403 |
-| `web/index.html` | 问候页 |
-| `web/tokens.css` | 页面主题变量的后备值 |
-| `tabs/` | 示例主页的应用页面图标 |
-| `screenshots/home.png` | 商店详情页的示例截图 |
-| `scripts/smoke-probes.sh` | 检查真实页面和网关注入身份的插件探针 |
+## 登录
 
-从模板创建自己的插件后，替换示例清单、网页和素材；具体步骤见[写插件](https://github.com/wontonapp/wonton-docs/blob/main/develop.md#写插件)。
+用云吞的账号登录：打开网页直接跳云吞登录，账号自动创建，应用里不设密码、没有第二个登录页。
 
-## 对着别的栈跑探针
+第一次进去先建一个"家庭"，再在家庭设置里把家人邀请进来。
 
-`probes`、`api`、`session` 按 `.wonton/.env` 的 `WONTON_BASE_DOMAIN` 拼核心地址，`up` 起的栈自己写这个键。插件装进别人的栈、或者对着已有环境排查时，把那套栈的基础域名写进 `.wonton/.env`，不要只按实例名猜地址：实例名只是资源名前缀，网关按 Host 认域名，拼错了会回“没有安装”。
+**家人和云吞的家人名单不会自动对应**：家人要先用自己的云吞账号打开一次购物清单（账号会自动建好），
+主人在应用里搜索并把他邀请进同一个"家庭"，之后两人的清单才是一份。
 
-```bash
-WONTON_BASE_DOMAIN=wonton.localhost
-```
+## 数据在哪
 
-## 核心镜像
+SQLite 数据库和上传的图片都在应用数据目录的 `data/` 子目录里。卸载时选"保留数据"，重装后清单和菜谱都还在；
+选"删除数据"则全部清掉。
 
-检查和冒烟默认用套件里的核心镜像（`ghcr.io/wontonapp/wonton-core:main`）；要固定别的核心镜像，在仓库 Settings → Variables 设 `WONTON_CORE_IMAGE`，手动触发“检查”时填的 `core-image` 输入优先。
+## 要出网的功能
 
-## 更新开发套件
+只有**从网址导入菜谱**（粘贴一个菜谱网页的地址，服务端替你抓下来解析出食材）需要出网。清单、菜谱、
+菜单和账目都不出网，不访问任何外部服务。
 
-```bash
-scripts/dev.sh kit-update
-```
+## 已知限制
 
-在从模板新建的插件仓库中更新套件；本仓库是套件源头，执行时只提示并退出。版本、可选引用和自定义脚本约定见[开发指南](https://github.com/wontonapp/wonton-docs/blob/main/develop.md#更新开发套件)。
-
-## 图标
-
-`icon.svg` 是本仓库原创线条图标，按本仓库 MIT 许可证分发，见 [NOTICE](NOTICE)。
+- 家人账号只有登录一次并被邀请进"家庭"后，才能和主人看到同一份清单。
+- 应用登录页会同时显示一个"Google"登录按钮（上游把同一个登录源注册了两次），点它走的也是云吞登录，效果一样。
+- 没有接入 Agent 工具（MCP）：上游的 MCP 接口要求用某个用户的长期令牌做鉴权，等底座支持后再接。
